@@ -1,6 +1,6 @@
 {
   "name": "xsheel",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "A tiny collection of shell helpers runnable via npx.",
   "license": "MIT",
   "type": "module",
