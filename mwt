@@ -279,12 +279,25 @@ fi
 worktree_parent="${root_dir%/}/${project_name}"
 mkdir -p "$worktree_parent"
 
+branch_exists=0
+start_ref=""
 if [[ -n "$custom_branch" ]]; then
-  branch_name="$custom_branch"
-  worktree_path="${worktree_parent}/${custom_branch}"
-  if git_in_repo show-ref --verify --quiet "refs/heads/${branch_name}"; then
-    die "branch already exists: ${branch_name}"
+  if git_in_repo show-ref --verify --quiet "refs/heads/${custom_branch}"; then
+    branch_name="$custom_branch"
+    branch_exists=1
+  elif git_in_repo rev-parse --verify --quiet "refs/remotes/${custom_branch}" >/dev/null 2>&1; then
+    branch_name="${custom_branch#*/}"
+    start_ref="$custom_branch"
+  else
+    remote_ref=$(git_in_repo for-each-ref --format='%(refname:short)' "refs/remotes/*/${custom_branch}" | head -1) || true
+    if [[ -n "$remote_ref" ]]; then
+      branch_name="$custom_branch"
+      start_ref="$remote_ref"
+    else
+      branch_name="$custom_branch"
+    fi
   fi
+  worktree_path="${worktree_parent}/${branch_name}"
   if [[ -e "$worktree_path" ]]; then
     die "worktree path already exists: ${worktree_path}"
   fi
@@ -305,7 +318,13 @@ else
   done
 fi
 
-git_in_repo worktree add -b "$branch_name" "$worktree_path" "$base_ref" >/dev/null
+if [[ $branch_exists -eq 1 ]]; then
+  git_in_repo worktree add "$worktree_path" "$branch_name" >/dev/null
+elif [[ -n "$start_ref" ]]; then
+  git_in_repo worktree add -b "$branch_name" "$worktree_path" "$start_ref" >/dev/null
+else
+  git_in_repo worktree add -b "$branch_name" "$worktree_path" "$base_ref" >/dev/null
+fi
 copy_extras "$repo_root" "$worktree_path"
 
 if [[ $print_path -eq 1 ]]; then
