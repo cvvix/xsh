@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  mwt [--base <ref>] [--root <dir>] [--no-shell] [--print-path] [--branch-prefix <p>]
+  mwt [-c <branch>] [--base <ref>] [--root <dir>] [--no-shell] [--print-path] [--branch-prefix <p>]
   mwt delete <branch> [--force] [--root <dir>]
   mwt delete-all [--force] [--root <dir>] [--branch-prefix <p>]
 
@@ -22,6 +22,7 @@ Delete-all behavior:
   - Deletes local branches matching <branch-prefix> that point to those worktrees
 
 Options:
+  -c <branch>             Create worktree with the specified branch name
   --base <ref>            Base ref/commit for the new branch (default: HEAD)
   --root <dir>            Worktree root directory (default: ~/Library/Application Support/mwt/worktrees)
   --branch-prefix <p>     Prefix for created branch name (default: wt-)
@@ -56,6 +57,7 @@ start_shell=1
 print_path=0
 copy_config_file=""
 copy_default_file=""
+custom_branch=""
 
 subcmd=""
 target_branch=""
@@ -76,6 +78,12 @@ fi
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    -c)
+      [[ -z "$subcmd" ]] || die "-c is not valid with ${subcmd}"
+      [[ $# -ge 2 ]] || die "-c requires a branch name"
+      custom_branch="$2"
+      shift 2
+      ;;
     --base)
       [[ -z "$subcmd" ]] || die "--base is not valid with ${subcmd}"
       [[ $# -ge 2 ]] || die "--base requires a value"
@@ -271,20 +279,31 @@ fi
 worktree_parent="${root_dir%/}/${project_name}"
 mkdir -p "$worktree_parent"
 
-attempts=0
-max_attempts=50
-while :; do
-  attempts=$((attempts + 1))
-  [[ $attempts -le $max_attempts ]] || die "failed to generate a unique id after ${max_attempts} attempts"
+if [[ -n "$custom_branch" ]]; then
+  branch_name="$custom_branch"
+  worktree_path="${worktree_parent}/${custom_branch}"
+  if git_in_repo show-ref --verify --quiet "refs/heads/${branch_name}"; then
+    die "branch already exists: ${branch_name}"
+  fi
+  if [[ -e "$worktree_path" ]]; then
+    die "worktree path already exists: ${worktree_path}"
+  fi
+else
+  attempts=0
+  max_attempts=50
+  while :; do
+    attempts=$((attempts + 1))
+    [[ $attempts -le $max_attempts ]] || die "failed to generate a unique id after ${max_attempts} attempts"
 
-  id="$(short_id)"
-  branch_name="${branch_prefix}${id}"
-  worktree_path="${worktree_parent}/${id}"
+    id="$(short_id)"
+    branch_name="${branch_prefix}${id}"
+    worktree_path="${worktree_parent}/${id}"
 
-  git_in_repo show-ref --verify --quiet "refs/heads/${branch_name}" && continue
-  [[ -e "$worktree_path" ]] && continue
-  break
-done
+    git_in_repo show-ref --verify --quiet "refs/heads/${branch_name}" && continue
+    [[ -e "$worktree_path" ]] && continue
+    break
+  done
+fi
 
 git_in_repo worktree add -b "$branch_name" "$worktree_path" "$base_ref" >/dev/null
 copy_extras "$repo_root" "$worktree_path"
