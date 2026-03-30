@@ -5,6 +5,7 @@ usage() {
   cat <<'EOF'
 Usage:
   mwt [-c <branch>] [--base <ref>] [--root <dir>] [--no-shell] [--print-path] [--branch-prefix <p>]
+  mwt list [-l] [--root <dir>]
   mwt delete <branch> [--force] [--root <dir>]
   mwt delete-all [--force] [--root <dir>] [--branch-prefix <p>]
 
@@ -17,6 +18,9 @@ Delete behavior:
   - Removes the worktree associated with <branch> (if any)
   - Deletes the local branch <branch>
 
+List behavior:
+  - Lists all worktrees for the current project
+
 Delete-all behavior:
   - Removes all worktrees created under: <root>/<project>/
   - Deletes local branches matching <branch-prefix> that point to those worktrees
@@ -28,6 +32,7 @@ Options:
   --branch-prefix <p>     Prefix for created branch name (default: wt-)
   --no-shell              Do not start a shell; just create the worktree
   --print-path            Print the created worktree path to stdout
+  -l, list                List all worktrees for current project
   --force                 For delete: force-remove worktree and delete branch
   -h, --help              Show this help
 EOF
@@ -63,6 +68,10 @@ subcmd=""
 target_branch=""
 if [[ $# -ge 1 ]]; then
   case "$1" in
+    list|-l)
+      subcmd="list"
+      shift
+      ;;
     delete|rm)
       subcmd="delete"
       [[ $# -ge 2 ]] || die "delete requires a branch name (use --help)"
@@ -189,6 +198,11 @@ copy_extras() {
     fi
   done
 }
+
+if [[ "$subcmd" == "list" ]]; then
+  git_in_repo worktree list
+  exit 0
+fi
 
 if [[ "$subcmd" == "delete" ]]; then
   if ! git_in_repo show-ref --verify --quiet "refs/heads/${target_branch}"; then
